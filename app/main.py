@@ -15,10 +15,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://smart-travel-assistant-gules.vercel.app",  # Vercel frontend
-        "http://localhost:5173",  # Local development
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

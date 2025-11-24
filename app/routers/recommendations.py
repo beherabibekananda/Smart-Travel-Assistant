@@ -136,3 +136,10 @@ def nearby_hospitals(request: schemas.HospitalRecommendationRequest, db: Session
     nearby.sort(key=lambda x: (x.distance_km, -x.rating))
     
     return nearby[:5]
+
+@router.get("/geocode")
+def geocode_address(address: str):
+    location = google_maps_service.geocode(address)
+    if not location:
+        raise HTTPException(status_code=404, detail="Address not found")
+    return location

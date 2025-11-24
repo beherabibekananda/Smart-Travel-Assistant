@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { getRestaurantRecommendations, getHotelRecommendations, getNearbyHospitals, createBooking, type Place } from '../services/api';
+import { getRestaurantRecommendations, getHotelRecommendations, getNearbyHospitals, createBooking, geocodeLocation, type Place } from '../services/api';
 import { Utensils, Hotel, Activity, MapPin, Search } from 'lucide-react';
 import PaymentModal from '../components/PaymentModal';
 
@@ -54,6 +54,40 @@ const Trip: React.FC = () => {
             alert('Failed to create booking.');
         },
     });
+
+    const handleCurrentLocation = () => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setSearchParams(prev => ({
+                        ...prev,
+                        current_lat: position.coords.latitude,
+                        current_lon: position.coords.longitude
+                    }));
+                },
+                (error) => {
+                    console.error("Error getting location:", error);
+                    alert("Unable to retrieve your location. Please ensure location services are enabled.");
+                }
+            );
+        } else {
+            alert("Geolocation is not supported by this browser.");
+        }
+    };
+
+    const handleLocationSearch = async (address: string) => {
+        try {
+            const res = await geocodeLocation(address);
+            setSearchParams(prev => ({
+                ...prev,
+                current_lat: res.data.lat,
+                current_lon: res.data.lon
+            }));
+        } catch (error) {
+            console.error("Error geocoding location:", error);
+            alert("Location not found. Please try a different search term.");
+        }
+    };
 
     const handleSearch = () => {
         if (!userId && activeTab !== 'hospitals') {
@@ -166,24 +200,64 @@ const Trip: React.FC = () => {
                         </h2>
 
                         <div className="space-y-4">
+                            {/* Location Search */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
-                                <input
-                                    type="number"
-                                    value={searchParams.current_lat}
-                                    onChange={(e) => setSearchParams(p => ({ ...p, current_lat: parseFloat(e.target.value) }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                />
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Search city..."
+                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                const val = (e.target as HTMLInputElement).value;
+                                                if (val) handleLocationSearch(val);
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            const input = document.querySelector('input[placeholder="Search city..."]') as HTMLInputElement;
+                                            if (input?.value) handleLocationSearch(input.value);
+                                        }}
+                                        className="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
+                                        title="Search Location"
+                                    >
+                                        <Search className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={handleCurrentLocation}
+                                        className="px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+                                        title="Use Current Location"
+                                    >
+                                        <MapPin className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
-                                <input
-                                    type="number"
-                                    value={searchParams.current_lon}
-                                    onChange={(e) => setSearchParams(p => ({ ...p, current_lon: parseFloat(e.target.value) }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                />
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
+                                    <input
+                                        type="number"
+                                        value={searchParams.current_lat}
+                                        onChange={(e) => setSearchParams(p => ({ ...p, current_lat: parseFloat(e.target.value) }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
+                                        readOnly
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
+                                    <input
+                                        type="number"
+                                        value={searchParams.current_lon}
+                                        onChange={(e) => setSearchParams(p => ({ ...p, current_lon: parseFloat(e.target.value) }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
+                                        readOnly
+                                    />
+                                </div>
                             </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Radius (km)</label>
                                 <input

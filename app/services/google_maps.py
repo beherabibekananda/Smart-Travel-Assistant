@@ -136,4 +136,33 @@ class GoogleMapsService:
             
         return synced_places
 
+    def geocode(self, address: str) -> dict:
+        """
+        Geocodes an address to lat/lon using Google Maps Geocoding API.
+        """
+        if not self.api_key:
+            print("Warning: GOOGLE_API_KEY not set.")
+            return None
+
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        params = {
+            "address": address,
+            "key": self.api_key
+        }
+
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data["status"] == "OK" and data["results"]:
+                location = data["results"][0]["geometry"]["location"]
+                return {"lat": location["lat"], "lon": location["lng"]}
+            else:
+                print(f"[Google Maps] Geocoding failed: {data.get('status')}")
+                return None
+        except Exception as e:
+            print(f"Error geocoding address: {e}")
+            return None
+
 google_maps_service = GoogleMapsService()

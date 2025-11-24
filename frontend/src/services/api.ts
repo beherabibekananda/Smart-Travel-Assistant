@@ -84,4 +84,6 @@ export const createBooking = (bookingData: {
 
 export const getUserBookings = (userId: number) => api.get<Booking[]>(`/bookings/user/${userId}`);
 
+export const geocodeLocation = (address: string) => api.get<{ lat: number; lon: number }>('/recommend/geocode', { params: { address } });
+
 export default api;
