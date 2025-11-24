@@ -1,7 +1,8 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+// Use environment variable for API URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface User {
     id: number;
@@ -42,6 +43,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUser(response.data);
+            // Store user ID for convenience
+            localStorage.setItem('user_id', response.data.id.toString());
         } catch (error) {
             console.error('Failed to fetch user:', error);
             logout();

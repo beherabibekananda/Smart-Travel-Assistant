@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { recommendRestaurants, recommendHotels, getNearbyHospitals, createBooking, type Place } from '../services/api';
+import { getRestaurantRecommendations, getHotelRecommendations, getNearbyHospitals, createBooking, type Place } from '../services/api';
 import { Utensils, Hotel, Activity, MapPin, Search } from 'lucide-react';
 
 const Trip: React.FC = () => {
@@ -18,19 +18,23 @@ const Trip: React.FC = () => {
     });
 
     const restaurantMutation = useMutation({
-        mutationFn: recommendRestaurants,
+        mutationFn: (data: { user_id: number; current_lat: number; current_lon: number; radius_km: number; planned_meal_time?: string }) =>
+            getRestaurantRecommendations(data).then(res => res.data),
     });
 
     const hotelMutation = useMutation({
-        mutationFn: recommendHotels,
+        mutationFn: (data: { user_id: number; current_lat: number; current_lon: number; radius_km: number }) =>
+            getHotelRecommendations(data).then(res => res.data),
     });
 
     const hospitalMutation = useMutation({
-        mutationFn: getNearbyHospitals,
+        mutationFn: (data: { current_lat: number; current_lon: number; radius_km: number }) =>
+            getNearbyHospitals(data).then(res => res.data),
     });
 
     const bookingMutation = useMutation({
-        mutationFn: createBooking,
+        mutationFn: (data: { user_id: number; place_id: number; booking_type: string }) =>
+            createBooking(data).then(res => res.data),
         onSuccess: () => {
             alert('Booking confirmed successfully!');
         },

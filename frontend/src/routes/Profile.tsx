@@ -19,7 +19,7 @@ const Profile: React.FC = () => {
 
     const { data: user, refetch } = useQuery({
         queryKey: ['user', userId],
-        queryFn: () => getUser(userId!),
+        queryFn: () => getUser(userId!).then(res => res.data),
         enabled: !!userId,
     });
 
@@ -36,7 +36,7 @@ const Profile: React.FC = () => {
     }, [user]);
 
     const mutation = useMutation({
-        mutationFn: createUser,
+        mutationFn: (data: any) => createUser(data).then(res => res.data),
         onSuccess: (data) => {
             localStorage.setItem('user_id', data.id.toString());
             setUserId(data.id);

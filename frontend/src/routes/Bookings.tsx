@@ -11,7 +11,7 @@ const Bookings: React.FC = () => {
 
     const { data: bookings, isLoading } = useQuery({
         queryKey: ['bookings', userId],
-        queryFn: () => getUserBookings(userId!),
+        queryFn: () => getUserBookings(userId!).then(res => res.data),
         enabled: !!userId,
     });
 
