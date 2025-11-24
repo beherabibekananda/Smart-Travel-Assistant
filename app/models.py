@@ -25,6 +25,13 @@ class BookingStatus(str, enum.Enum):
     CONFIRMED = "CONFIRMED"
     CANCELLED = "CANCELLED"
 
+class PaymentStatus(str, enum.Enum):
+    CREATED = "CREATED"
+    AUTHORIZED = "AUTHORIZED"
+    CAPTURED = "CAPTURED"
+    FAILED = "FAILED"
+    REFUNDED = "REFUNDED"
+
 class User(Base):
     __tablename__ = "users"
 
@@ -81,3 +88,20 @@ class Booking(Base):
 
     user = relationship("User", back_populates="bookings")
     place = relationship("Place", back_populates="bookings")
+    transaction = relationship("Transaction", back_populates="booking", uselist=False)
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    booking_id = Column(Integer, ForeignKey("bookings.id"), unique=True)
+    razorpay_order_id = Column(String, unique=True, nullable=False)
+    razorpay_payment_id = Column(String, unique=True, nullable=True)
+    razorpay_signature = Column(String, nullable=True)
+    amount = Column(Float, nullable=False)  # Amount in INR
+    currency = Column(String, default="INR")
+    status = Column(Enum(PaymentStatus), default=PaymentStatus.CREATED)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    booking = relationship("Booking", back_populates="transaction")

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { getRestaurantRecommendations, getHotelRecommendations, getNearbyHospitals, createBooking, type Place } from '../services/api';
 import { Utensils, Hotel, Activity, MapPin, Search } from 'lucide-react';
+import PaymentModal from '../components/PaymentModal';
 
 const Trip: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'restaurants' | 'hotels' | 'hospitals'>('restaurants');
@@ -16,6 +17,10 @@ const Trip: React.FC = () => {
         radius_km: 5,
         planned_meal_time: 'lunch',
     });
+
+    // Payment Modal State
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [selectedPlace, setSelectedPlace] = useState<{ id: number; name: string; amount: number } | null>(null);
 
     const restaurantMutation = useMutation({
         mutationFn: (data: { user_id: number; current_lat: number; current_lon: number; radius_km: number; planned_meal_time?: string }) =>
@@ -35,8 +40,15 @@ const Trip: React.FC = () => {
     const bookingMutation = useMutation({
         mutationFn: (data: { user_id: number; place_id: number; booking_type: string }) =>
             createBooking(data).then(res => res.data),
-        onSuccess: () => {
-            alert('Booking confirmed successfully!');
+        onSuccess: (data) => {
+            // Open payment modal after booking is created
+            if (selectedPlace) {
+                setPaymentModalOpen(true);
+                // Update selected place with booking ID if needed, but we use the one from state
+                // Actually we need the booking ID returned from createBooking to pass to PaymentModal
+                // Let's update the state with the booking ID
+                setSelectedPlace(prev => prev ? { ...prev, bookingId: data.id } : null);
+            }
         },
         onError: () => {
             alert('Failed to create booking.');
@@ -73,11 +85,23 @@ const Trip: React.FC = () => {
         }
     };
 
-    const handleBook = (placeId: number, type: 'RESTAURANT' | 'HOTEL') => {
+    const handleBook = (place: Place, type: 'RESTAURANT' | 'HOTEL') => {
         if (!userId) return;
+
+        // Calculate amount based on type
+        const amount = type === 'RESTAURANT'
+            ? (place.avg_cost_for_two || 500)
+            : (place.price_per_night || 2000);
+
+        setSelectedPlace({
+            id: place.id,
+            name: place.name,
+            amount: amount
+        });
+
         bookingMutation.mutate({
             user_id: userId,
-            place_id: placeId,
+            place_id: place.id,
             booking_type: type,
         });
     };
@@ -121,11 +145,11 @@ const Trip: React.FC = () => {
 
             {type !== 'HOSPITAL' && (
                 <button
-                    onClick={() => handleBook(place.id, type)}
+                    onClick={() => handleBook(place, type)}
                     disabled={bookingMutation.isPending}
                     className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
-                    {bookingMutation.isPending ? 'Booking...' : 'Book Now'}
+                    {bookingMutation.isPending && selectedPlace?.id === place.id ? 'Processing...' : 'Book & Pay'}
                 </button>
             )}
         </div>
@@ -234,6 +258,21 @@ const Trip: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Payment Modal */}
+            {selectedPlace && (selectedPlace as any).bookingId && (
+                <PaymentModal
+                    isOpen={paymentModalOpen}
+                    onClose={() => setPaymentModalOpen(false)}
+                    bookingId={(selectedPlace as any).bookingId}
+                    amount={selectedPlace.amount}
+                    placeName={selectedPlace.name}
+                    onSuccess={() => {
+                        setPaymentModalOpen(false);
+                        // Optionally refresh bookings or show success message
+                    }}
+                />
+            )}
         </div>
     );
 };

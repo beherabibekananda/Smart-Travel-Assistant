@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
-from .routers import users, recommendations, bookings, auth, export
+from .routers import users, recommendations, bookings, auth, export, payments
 from .ml.diet_model import diet_model
 from .seed import seed_data
 
@@ -45,3 +45,5 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(recommendations.router)
 app.include_router(bookings.router)
+app.include_router(export.router)
+app.include_router(payments.router)

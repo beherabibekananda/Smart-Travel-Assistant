@@ -83,3 +83,33 @@ class HospitalRecommendationRequest(BaseModel):
     current_lat: float
     current_lon: float
     radius_km: float
+
+# Payment Schemas
+class PaymentOrderCreate(BaseModel):
+    booking_id: int
+    amount: float
+
+class PaymentOrderResponse(BaseModel):
+    order_id: str
+    amount: float
+    currency: str
+    razorpay_key_id: str
+
+class PaymentVerify(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    booking_id: int
+
+class TransactionResponse(BaseModel):
+    id: int
+    booking_id: int
+    razorpay_order_id: str
+    razorpay_payment_id: Optional[str]
+    amount: float
+    currency: str
+    status: str
+    created_at: datetime
+
+    class Config:
+        orm_mode = True

@@ -12,3 +12,5 @@ passlib[bcrypt]
 python-jose[cryptography]
 python-multipart
 openpyxl
+razorpay
+email-validator
