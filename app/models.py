@@ -29,11 +29,15 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
     name = Column(String, index=True)
     age = Column(Integer)
     diet_type = Column(Enum(DietType))
     daily_food_budget = Column(Float)
     hotel_budget_per_night = Column(Float)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     bookings = relationship("Booking", back_populates="user")
 

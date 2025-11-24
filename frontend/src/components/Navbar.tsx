@@ -1,40 +1,51 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Map, User, Calendar, Home } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plane, LogOut } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Navbar: React.FC = () => {
-    const location = useLocation();
-
-    const isActive = (path: string) => {
-        return location.pathname === path ? 'text-blue-600 font-semibold' : 'text-gray-600 hover:text-blue-500';
-    };
+    const { isAuthenticated, user, logout } = useAuth();
 
     return (
-        <nav className="bg-white shadow-md sticky top-0 z-50">
-            <div className="max-w-6xl mx-auto px-4">
+        <nav className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center h-16">
-                    <Link to="/" className="flex items-center gap-2 text-xl font-bold text-blue-600">
-                        <Map className="w-6 h-6" />
-                        <span>Smart Travel</span>
+                    <Link to="/" className="flex items-center space-x-2">
+                        <Plane className="w-8 h-8 text-blue-600" />
+                        <span className="text-xl font-bold text-gray-900">Smart Travel</span>
                     </Link>
 
-                    <div className="flex space-x-6">
-                        <Link to="/" className={`flex items-center gap-1 ${isActive('/')}`}>
-                            <Home className="w-4 h-4" />
-                            <span className="hidden sm:inline">Home</span>
-                        </Link>
-                        <Link to="/profile" className={`flex items-center gap-1 ${isActive('/profile')}`}>
-                            <User className="w-4 h-4" />
-                            <span className="hidden sm:inline">Profile</span>
-                        </Link>
-                        <Link to="/trip" className={`flex items-center gap-1 ${isActive('/trip')}`}>
-                            <Map className="w-4 h-4" />
-                            <span className="hidden sm:inline">Trip</span>
-                        </Link>
-                        <Link to="/bookings" className={`flex items-center gap-1 ${isActive('/bookings')}`}>
-                            <Calendar className="w-4 h-4" />
-                            <span className="hidden sm:inline">Bookings</span>
-                        </Link>
+                    <div className="flex items-center space-x-6">
+                        {isAuthenticated ? (
+                            <>
+                                <Link to="/profile" className="text-gray-700 hover:text-blue-600 font-medium transition-colors">
+                                    Profile
+                                </Link>
+                                <Link to="/trip" className="text-gray-700 hover:text-blue-600 font-medium transition-colors">
+                                    Trip
+                                </Link>
+                                <Link to="/bookings" className="text-gray-700 hover:text-blue-600 font-medium transition-colors">
+                                    Bookings
+                                </Link>
+                                <span className="text-gray-600 text-sm">{user?.email}</span>
+                                <button
+                                    onClick={logout}
+                                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                    Logout
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <Link to="/login" className="text-gray-700 hover:text-blue-600 font-medium transition-colors">
+                                    Login
+                                </Link>
+                                <Link to="/signup" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                                    Sign Up
+                                </Link>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>

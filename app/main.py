@@ -1,6 +1,7 @@
 from fastapi import FastAPI
-from .database import engine, Base, SessionLocal
-from .routers import users, recommendations, bookings
+from fastapi.middleware.cors import CORSMiddleware
+from .database import engine, Base
+from .routers import users, recommendations, bookings, auth, export
 from .ml.diet_model import diet_model
 from .seed import seed_data
 
@@ -8,18 +9,25 @@ from .seed import seed_data
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="Smart Travel Assistant",
-    description="AI-powered backend for travel recommendations based on diet, budget, and location.",
-    version="1.0.0"
+    title="Smart Travel Assistant API"
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.on_event("startup")
 def startup_event():
     # Train ML Model
-    print("Training Diet Compatibility Model...")
     diet_model.train()
     
-    # Seed Data
+    # Seed Data (only if database is empty)
+    from .database import SessionLocal
     db = SessionLocal()
     try:
         seed_data(db)
@@ -30,6 +38,7 @@ def startup_event():
 def health_check():
     return {"status": "ok"}
 
+app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(recommendations.router)
 app.include_router(bookings.router)

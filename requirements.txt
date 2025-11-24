@@ -8,3 +8,7 @@ numpy
 requests
 python-dotenv
 gunicorn
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+openpyxl

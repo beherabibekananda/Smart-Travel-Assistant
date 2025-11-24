@@ -1,10 +1,11 @@
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from .models import DietType, PlaceType, BookingType, BookingStatus
 from datetime import datetime
 
 # User Schemas
 class UserBase(BaseModel):
+    email: EmailStr
     name: str
     age: int
     diet_type: DietType
@@ -12,13 +13,19 @@ class UserBase(BaseModel):
     hotel_budget_per_night: float
 
 class UserCreate(UserBase):
-    pass
+    password: str
 
 class User(UserBase):
     id: int
+    is_active: bool
+    created_at: datetime
 
     class Config:
         orm_mode = True
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
 # Place Schemas
 class PlaceBase(BaseModel):
