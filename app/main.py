@@ -18,7 +18,6 @@ app.add_middleware(
     allow_origins=[
         "https://smart-travel-assistant-gules.vercel.app",  # Vercel frontend
         "http://localhost:5173",  # Local development
-        "*"  # Allow all for now (remove in production)
     ],
     allow_credentials=True,
     allow_methods=["*"],
