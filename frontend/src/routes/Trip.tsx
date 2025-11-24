@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { getRestaurantRecommendations, getHotelRecommendations, getNearbyHospitals, createBooking, geocodeLocation, type Place } from '../services/api';
-import { Utensils, Hotel, Activity, MapPin, Search } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { getRestaurantRecommendations, getHotelRecommendations, getNearbyHospitals, createBooking, geocodeLocation, addFavorite, removeFavorite, getFavorites, addSearchHistory, type Place } from '../services/api';
+import { Utensils, Hotel, Activity, MapPin, Search, Heart } from 'lucide-react';
 import PaymentModal from '../components/PaymentModal';
 
 const Trip: React.FC = () => {
@@ -89,10 +89,41 @@ const Trip: React.FC = () => {
         }
     };
 
+    const { data: favorites, refetch: refetchFavorites } = useQuery({
+        queryKey: ['favorites', userId],
+        queryFn: () => getFavorites().then(res => res.data),
+        enabled: !!userId,
+    });
+
+    const addFavoriteMutation = useMutation({
+        mutationFn: addFavorite,
+        onSuccess: () => refetchFavorites(),
+    });
+
+    const removeFavoriteMutation = useMutation({
+        mutationFn: removeFavorite,
+        onSuccess: () => refetchFavorites(),
+    });
+
+    const toggleFavorite = (placeId: number) => {
+        if (!userId) return;
+        const isFav = favorites?.some((f: any) => f.place_id === placeId);
+        if (isFav) {
+            removeFavoriteMutation.mutate(placeId);
+        } else {
+            addFavoriteMutation.mutate(placeId);
+        }
+    };
+
     const handleSearch = () => {
         if (!userId && activeTab !== 'hospitals') {
             alert('Please create a profile first!');
             return;
+        }
+
+        // Save Search History
+        if (userId) {
+            addSearchHistory(`Search for ${activeTab}`, `${searchParams.current_lat}, ${searchParams.current_lon}`);
         }
 
         if (activeTab === 'restaurants') {
@@ -140,54 +171,65 @@ const Trip: React.FC = () => {
         });
     };
 
-    const renderPlaceCard = (place: Place, type: 'RESTAURANT' | 'HOTEL' | 'HOSPITAL') => (
-        <div key={place.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-            <div className="flex justify-between items-start mb-3">
-                <h3 className="text-lg font-bold text-gray-900">{place.name}</h3>
-                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
-                    {place.rating} ★
-                </span>
-            </div>
+    const renderPlaceCard = (place: Place, type: 'RESTAURANT' | 'HOTEL' | 'HOSPITAL') => {
+        const isFavorite = favorites?.some((f: any) => f.place_id === place.id);
 
-            <div className="text-sm text-gray-600 space-y-1 mb-4">
-                <p className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {place.distance_km?.toFixed(2)} km away</p>
-                {type === 'RESTAURANT' && <p>Cost for two: ₹{place.avg_cost_for_two}</p>}
-                {type === 'HOTEL' && <p>Price per night: ₹{place.price_per_night}</p>}
-                {type === 'RESTAURANT' && place.diet_compatibility_score !== undefined && (
-                    <div className="mt-2">
-                        <div className="flex justify-between text-xs mb-1">
-                            <span>Diet Match</span>
-                            <span>{(place.diet_compatibility_score * 100).toFixed(0)}%</span>
+        return (
+            <div key={place.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative group">
+                <button
+                    onClick={(e) => { e.stopPropagation(); toggleFavorite(place.id); }}
+                    className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white shadow-sm transition-all z-10"
+                >
+                    <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-400 hover:text-red-500'}`} />
+                </button>
+
+                <div className="flex justify-between items-start mb-3 pr-8">
+                    <h3 className="text-lg font-bold text-gray-900">{place.name}</h3>
+                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
+                        {place.rating} ★
+                    </span>
+                </div>
+
+                <div className="text-sm text-gray-600 space-y-1 mb-4">
+                    <p className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {place.distance_km?.toFixed(2)} km away</p>
+                    {type === 'RESTAURANT' && <p>Cost for two: ₹{place.avg_cost_for_two}</p>}
+                    {type === 'HOTEL' && <p>Price per night: ₹{place.price_per_night}</p>}
+                    {type === 'RESTAURANT' && place.diet_compatibility_score !== undefined && (
+                        <div className="mt-2">
+                            <div className="flex justify-between text-xs mb-1">
+                                <span>Diet Match</span>
+                                <span>{(place.diet_compatibility_score * 100).toFixed(0)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                <div
+                                    className={`h-1.5 rounded-full ${place.diet_compatibility_score > 0.7 ? 'bg-green-500' : place.diet_compatibility_score > 0.4 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                    style={{ width: `${place.diet_compatibility_score * 100}%` }}
+                                ></div>
+                            </div>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5">
-                            <div
-                                className={`h-1.5 rounded-full ${place.diet_compatibility_score > 0.7 ? 'bg-green-500' : place.diet_compatibility_score > 0.4 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                style={{ width: `${place.diet_compatibility_score * 100}%` }}
-                            ></div>
-                        </div>
-                    </div>
+                    )}
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                    {place.tags.map(tag => (
+                        <span key={tag} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md capitalize">
+                            {tag.replace('_', ' ')}
+                        </span>
+                    ))}
+                </div>
+
+                {type !== 'HOSPITAL' && (
+                    <button
+                        onClick={() => handleBook(place, type)}
+                        disabled={bookingMutation.isPending}
+                        className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                    >
+                        {bookingMutation.isPending && selectedPlace?.id === place.id ? 'Processing...' : 'Book & Pay'}
+                    </button>
                 )}
             </div>
-
-            <div className="flex flex-wrap gap-2 mb-4">
-                {place.tags.map(tag => (
-                    <span key={tag} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md capitalize">
-                        {tag.replace('_', ' ')}
-                    </span>
-                ))}
-            </div>
-
-            {type !== 'HOSPITAL' && (
-                <button
-                    onClick={() => handleBook(place, type)}
-                    disabled={bookingMutation.isPending}
-                    className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                >
-                    {bookingMutation.isPending && selectedPlace?.id === place.id ? 'Processing...' : 'Book & Pay'}
-                </button>
-            )}
-        </div>
-    );
+        );
+    };
 
     return (
         <div className="max-w-6xl mx-auto p-6">

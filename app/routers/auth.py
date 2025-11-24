@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import timedelta, datetime
 from .. import models, schemas
 from ..database import get_db
 from ..auth import (
@@ -65,3 +65,41 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def read_users_me(current_user: models.User = Depends(get_current_active_user)):
     """Get current user information."""
     return current_user
+
+@router.post("/forgot-password")
+def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Generate a password reset token.
+    In a real app, this would send an email. Here we return it for testing.
+    """
+    user = db.query(models.User).filter(models.User.email == request.email).first()
+    if not user:
+        # Return 200 even if user not found to prevent email enumeration
+        return {"message": "If the email exists, a reset token has been sent."}
+    
+    import uuid
+    token = str(uuid.uuid4())
+    user.reset_token = token
+    user.reset_token_expiry = datetime.utcnow() + timedelta(minutes=30)
+    db.commit()
+    
+    return {"message": "Password reset token generated", "reset_token": token}
+
+@router.post("/reset-password")
+def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Reset password using a valid token."""
+    user = db.query(models.User).filter(models.User.reset_token == request.token).first()
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid token")
+        
+    if user.reset_token_expiry < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Token expired")
+        
+    hashed_password = get_password_hash(request.new_password)
+    user.hashed_password = hashed_password
+    user.reset_token = None
+    user.reset_token_expiry = None
+    db.commit()
+    
+    return {"message": "Password updated successfully"}

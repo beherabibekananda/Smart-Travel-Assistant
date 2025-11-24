@@ -45,8 +45,13 @@ class User(Base):
     hotel_budget_per_night = Column(Float)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    reset_token = Column(String, nullable=True)
+    reset_token_expiry = Column(DateTime, nullable=True)
+    avatar_url = Column(String, nullable=True)
 
     bookings = relationship("Booking", back_populates="user")
+    search_history = relationship("SearchHistory", back_populates="user")
+    favorites = relationship("Favorite", back_populates="user")
 
 class Place(Base):
     __tablename__ = "places"
@@ -64,6 +69,7 @@ class Place(Base):
 
     menu_items = relationship("MenuItem", back_populates="place")
     bookings = relationship("Booking", back_populates="place")
+    favorited_by = relationship("Favorite", back_populates="place")
 
 class MenuItem(Base):
     __tablename__ = "menu_items"
@@ -105,3 +111,25 @@ class Transaction(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     booking = relationship("Booking", back_populates="transaction")
+
+class SearchHistory(Base):
+    __tablename__ = "search_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    query = Column(String, nullable=False)
+    location = Column(String, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="search_history")
+
+class Favorite(Base):
+    __tablename__ = "favorites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    place_id = Column(Integer, ForeignKey("places.id"))
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="favorites")
+    place = relationship("Place", back_populates="favorited_by")

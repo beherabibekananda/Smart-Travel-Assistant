@@ -52,3 +52,10 @@ def debug_db_schema():
     inspector = inspect(engine)
     columns = [col['name'] for col in inspector.get_columns("users")]
     return {"columns": columns}
+
+@app.post("/debug/reset-db")
+def reset_database():
+    from .database import engine, Base
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    return {"message": "Database reset successfully. All tables dropped and recreated."}

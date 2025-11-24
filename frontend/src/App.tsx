@@ -8,6 +8,8 @@ import Signup from './routes/Signup';
 import Profile from './routes/Profile';
 import Trip from './routes/Trip';
 import Bookings from './routes/Bookings';
+import ForgotPassword from './routes/ForgotPassword';
+import ResetPassword from './routes/ResetPassword';
 
 const queryClient = new QueryClient();
 
@@ -16,31 +18,37 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
 
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
 };
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <Router>
       <AuthProvider>
-        <Router>
+        <QueryClientProvider client={queryClient}>
           <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
             <Navbar />
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/trip" element={<ProtectedRoute><Trip /></ProtectedRoute>} />
               <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
             </Routes>
           </div>
-        </Router>
+        </QueryClientProvider>
       </AuthProvider>
-    </QueryClientProvider>
+    </Router>
   );
 }
 

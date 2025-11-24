@@ -31,9 +31,33 @@ def create_booking(booking: schemas.BookingCreate, db: Session = Depends(get_db)
     db.add(db_booking)
     db.commit()
     db.refresh(db_booking)
+    
+    # Send Confirmation Email (Mock)
+    from ..services.email_service import email_service
+    email_service.send_booking_confirmation(
+        email=user.email,
+        booking_details={
+            "user_name": user.name,
+            "place_name": place.name,
+            "date": str(db_booking.timestamp),
+            "status": db_booking.status
+        }
+    )
+    
     return db_booking
 
 @router.get("/user/{user_id}", response_model=List[schemas.Booking])
 def read_user_bookings(user_id: int, db: Session = Depends(get_db)):
     bookings = db.query(models.Booking).filter(models.Booking.user_id == user_id).all()
     return bookings
+
+@router.post("/{booking_id}/cancel", response_model=schemas.Booking)
+def cancel_booking(booking_id: int, db: Session = Depends(get_db)):
+    booking = db.query(models.Booking).filter(models.Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+        
+    booking.status = models.BookingStatus.CANCELLED
+    db.commit()
+    db.refresh(booking)
+    return booking

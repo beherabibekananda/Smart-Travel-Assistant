@@ -86,4 +86,20 @@ export const getUserBookings = (userId: number) => api.get<Booking[]>(`/bookings
 
 export const geocodeLocation = (address: string) => api.get<{ lat: number; lon: number }>('/recommend/geocode', { params: { address } });
 
+export const forgotPassword = (email: string) => api.post<{ message: string; reset_token?: string }>('/auth/forgot-password', { email });
+
+export const resetPassword = (data: { token: string; new_password: string }) => api.post<{ message: string }>('/auth/reset-password', data);
+
+// UX Improvements
+export const updateProfile = (data: Partial<User>) => api.put<User>('/users/me', data);
+
+export const cancelBooking = (bookingId: number) => api.post<Booking>(`/bookings/${bookingId}/cancel`);
+
+export const addFavorite = (placeId: number) => api.post<Place>(`/users/favorites/${placeId}`);
+export const removeFavorite = (placeId: number) => api.delete(`/users/favorites/${placeId}`);
+export const getFavorites = () => api.get<{ id: number; place_id: number; place: Place }[]>('/users/favorites');
+
+export const addSearchHistory = (query: string, location?: string) => api.post('/users/history', { query, location });
+export const getSearchHistory = () => api.get<{ id: number; query: string; location: string; timestamp: string }[]>('/users/history');
+
 export default api;

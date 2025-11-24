@@ -11,6 +11,7 @@ class UserBase(BaseModel):
     diet_type: DietType
     daily_food_budget: float
     hotel_budget_per_night: float
+    avatar_url: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str
@@ -26,6 +27,13 @@ class User(UserBase):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 # Place Schemas
 class PlaceBase(BaseModel):
@@ -61,6 +69,7 @@ class Booking(BookingBase):
     id: int
     timestamp: datetime
     status: BookingStatus
+    place: Optional[Place] = None
 
     class Config:
         orm_mode = True
@@ -110,6 +119,32 @@ class TransactionResponse(BaseModel):
     currency: str
     status: str
     created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+# History and Favorites
+class SearchHistoryCreate(BaseModel):
+    query: str
+    location: Optional[str] = None
+
+class SearchHistory(SearchHistoryCreate):
+    id: int
+    user_id: int
+    timestamp: datetime
+
+    class Config:
+        orm_mode = True
+
+class FavoriteCreate(BaseModel):
+    place_id: int
+
+class Favorite(BaseModel):
+    id: int
+    user_id: int
+    place_id: int
+    timestamp: datetime
+    place: Place
 
     class Config:
         orm_mode = True
