@@ -44,3 +44,11 @@ app.include_router(recommendations.router)
 app.include_router(bookings.router)
 app.include_router(export.router)
 app.include_router(payments.router)
+
+@app.get("/debug/db-schema")
+def debug_db_schema():
+    from sqlalchemy import inspect
+    from .database import engine
+    inspector = inspect(engine)
+    columns = [col['name'] for col in inspector.get_columns("users")]
+    return {"columns": columns}
