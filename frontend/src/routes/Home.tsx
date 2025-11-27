@@ -14,7 +14,7 @@ const Home = () => {
                         <div className="inline-block p-3 bg-gradient-primary rounded-full float-animation mb-6">
                             <Plane className="w-12 h-12 text-white" />
                         </div>
-                        <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
+                        <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
                             Your <span className="gradient-text">Smart</span> Travel
                             <br />
                             Companion Awaits
