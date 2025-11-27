@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { MapPin, Signal, CheckCircle, Compass, PenTool, Globe, Droplets, AlertTriangle, Battery } from 'lucide-react';
+import TravelSketch from '../components/TravelSketch';
 
 const TravelCompanion = () => {
     const [location, setLocation] = useState<string>('Fetching location...');
     const [networkStatus, setNetworkStatus] = useState<string>('Checking network...');
     const [remindersSet, setRemindersSet] = useState(false);
+    const [showSketch, setShowSketch] = useState(false);
 
     useEffect(() => {
         // 1. Get Location
@@ -44,16 +46,60 @@ const TravelCompanion = () => {
         }
     }, []);
 
+    // 3. Reminders Logic
+    useEffect(() => {
+        let waterInterval: ReturnType<typeof setInterval>;
+        let parentsInterval: ReturnType<typeof setInterval>;
+
+        if (remindersSet) {
+            // Request permission if not granted
+            if (Notification.permission !== 'granted') {
+                Notification.requestPermission();
+            }
+
+            // Water Reminder (30 mins)
+            waterInterval = setInterval(() => {
+                new Notification("💧 Hydration Check!", {
+                    body: "Time to drink some water and stay hydrated!",
+                    icon: "/pwa-192x192.png"
+                });
+            }, 30 * 60 * 1000);
+
+            // Parents Reminder (60 mins)
+            parentsInterval = setInterval(() => {
+                new Notification("👨‍👩‍👧 Family Time!", {
+                    body: "It's been an hour. Maybe give your parents a quick call?",
+                    icon: "/pwa-192x192.png"
+                });
+            }, 60 * 60 * 1000);
+        }
+
+        return () => {
+            if (waterInterval) clearInterval(waterInterval);
+            if (parentsInterval) clearInterval(parentsInterval);
+        };
+    }, [remindersSet]);
+
     const handleReminderToggle = () => {
         const newState = !remindersSet;
         setRemindersSet(newState);
 
         if (newState) {
-            // Request notification permission
-            if (Notification.permission !== 'granted') {
-                Notification.requestPermission();
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        new Notification("✅ Reminders Enabled", {
+                            body: "We'll remind you to drink water and call family.",
+                            icon: "/pwa-192x192.png"
+                        });
+                    }
+                });
+            } else if (Notification.permission === 'granted') {
+                new Notification("✅ Reminders Enabled", {
+                    body: "We'll remind you to drink water and call family.",
+                    icon: "/pwa-192x192.png"
+                });
             }
-            alert("Reminders set! You'll get an alert every 30 minutes to drink water, and every 60 minutes to call your parents.");
         }
     };
 
@@ -99,7 +145,7 @@ const TravelCompanion = () => {
                         </div>
                         <p className="text-sm text-gray-300 leading-relaxed">
                             {remindersSet
-                                ? "Reminders set! You'll get an alert every 30 minutes to drink water, and every 60 minutes to call your parents."
+                                ? "Reminders active! You'll get browser notifications for water and calls."
                                 : "Tap to enable safety reminders (Water & Parents)"}
                         </p>
                     </div>
@@ -129,7 +175,10 @@ const TravelCompanion = () => {
                 </div>
 
                 {/* Travel Sketch Card */}
-                <div className="bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-2xl p-6 shadow-xl h-48 flex flex-col items-center justify-center relative group cursor-pointer hover:bg-gray-800/70 transition-colors">
+                <div
+                    onClick={() => setShowSketch(true)}
+                    className="bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-2xl p-6 shadow-xl h-48 flex flex-col items-center justify-center relative group cursor-pointer hover:bg-gray-800/70 transition-colors"
+                >
                     <div className="absolute top-6 left-6 flex items-center gap-2">
                         <PenTool className="w-6 h-6 text-cyan-400" />
                         <h2 className="text-xl font-bold text-cyan-400">Travel Sketch</h2>
@@ -144,6 +193,9 @@ const TravelCompanion = () => {
                 </div>
 
             </div>
+
+            {/* Sketch Modal */}
+            {showSketch && <TravelSketch onClose={() => setShowSketch(false)} />}
         </div>
     );
 };
