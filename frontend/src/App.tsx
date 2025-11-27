@@ -11,6 +11,7 @@ import Bookings from './routes/Bookings';
 import ForgotPassword from './routes/ForgotPassword';
 import ResetPassword from './routes/ResetPassword';
 import VerifyEmail from './routes/VerifyEmail';
+import TravelCompanion from './routes/TravelCompanion';
 
 const queryClient = new QueryClient();
 
@@ -37,7 +38,8 @@ function App() {
           <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
             <Navbar />
             <Routes>
-              <Route path="/" element={<Home />} />
+              <Route path="/" element={<TravelCompanion />} />
+              <Route path="/landing" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/verify-email" element={<VerifyEmail />} />

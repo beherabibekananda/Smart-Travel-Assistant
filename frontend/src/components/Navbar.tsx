@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Plane, User, LogOut, Home, Calendar, BookmarkIcon, Menu, X } from 'lucide-react';
+import { Plane, User, LogOut, Home, Calendar, BookmarkIcon, Menu, X, Globe } from 'lucide-react';
 
 const Navbar = () => {
     const { user, logout } = useAuth();
@@ -36,6 +36,13 @@ const Navbar = () => {
                             <>
                                 <Link
                                     to="/"
+                                    className="flex items-center gap-1 px-4 py-2 text-gray-700 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-all duration-300"
+                                >
+                                    <Globe className="w-4 h-4" />
+                                    <span>Assistant</span>
+                                </Link>
+                                <Link
+                                    to="/landing"
                                     className="flex items-center gap-1 px-4 py-2 text-gray-700 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-all duration-300"
                                 >
                                     <Home className="w-4 h-4" />
@@ -108,6 +115,14 @@ const Navbar = () => {
                             <>
                                 <Link
                                     to="/"
+                                    onClick={() => setIsOpen(false)}
+                                    className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                >
+                                    <Globe className="w-5 h-5" />
+                                    <span className="font-medium">Assistant</span>
+                                </Link>
+                                <Link
+                                    to="/landing"
                                     onClick={() => setIsOpen(false)}
                                     className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 >
