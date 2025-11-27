@@ -8,6 +8,7 @@ load_dotenv()
 
 # MongoDB settings
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+print(f"DEBUG: MONGODB_URL loaded: {MONGODB_URL[:25]}... (Is localhost: {'localhost' in MONGODB_URL})")
 DATABASE_NAME = "smart_travel"
 
 # MongoDB client
