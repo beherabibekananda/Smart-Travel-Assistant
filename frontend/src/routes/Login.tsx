@@ -35,8 +35,16 @@ const Login: React.FC = () => {
                 <h2 className="text-3xl font-bold text-center text-gray-900 mb-6">Welcome Back</h2>
 
                 {error && (
-                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                        {error}
+                    <div className="bg-red-50 border-l-4 border-red-500 text-red-800 px-4 py-3 rounded-lg mb-6">
+                        <p className="text-sm">{error}</p>
+                        {error.includes('verify your email') && email && (
+                            <Link
+                                to={`/verify-email?email=${encodeURIComponent(email)}`}
+                                className="text-sm text-blue-600 hover:underline mt-2 inline-block font-medium"
+                            >
+                                Go to email verification →
+                            </Link>
+                        )}
                     </div>
                 )}
 

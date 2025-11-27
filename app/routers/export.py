@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
 from openpyxl import Workbook
 from io import BytesIO
 from datetime import datetime
+from bson import ObjectId
 from .. import models
-from ..database import get_db
 from ..auth import get_current_active_user
 
 router = APIRouter(
@@ -14,8 +13,7 @@ router = APIRouter(
 )
 
 @router.get("/users")
-def export_users(
-    db: Session = Depends(get_db),
+async def export_users(
     current_user: models.User = Depends(get_current_active_user)
 ):
     """Export all users to Excel file."""
@@ -29,10 +27,10 @@ def export_users(
     ws.append(headers)
     
     # Data
-    users = db.query(models.User).all()
+    users = await models.User.find().to_list()
     for user in users:
         ws.append([
-            user.id,
+            str(user.id),
             user.email,
             user.name,
             user.age,
@@ -56,8 +54,7 @@ def export_users(
     )
 
 @router.get("/bookings")
-def export_bookings(
-    db: Session = Depends(get_db),
+async def export_bookings(
     current_user: models.User = Depends(get_current_active_user)
 ):
     """Export all bookings to Excel file."""
@@ -67,16 +64,20 @@ def export_bookings(
     ws.title = "Bookings"
     
     # Headers
-    headers = ["ID", "User Email", "Place Name", "Booking Type", "Status", "Timestamp"]
+    headers = ["ID", "User ID", "Place ID", "Booking Type", "Status", "Timestamp"]
     ws.append(headers)
     
     # Data
-    bookings = db.query(models.Booking).join(models.User).join(models.Place).all()
+    bookings = await models.Booking.find().to_list()
     for booking in bookings:
+        # Get user and place info
+        user = await models.User.get(booking.user_id)
+        place = await models.Place.get(booking.place_id)
+        
         ws.append([
-            booking.id,
-            booking.user.email,
-            booking.place.name,
+            str(booking.id),
+            user.email if user else str(booking.user_id),
+            place.name if place else str(booking.place_id),
             booking.booking_type.value,
             booking.status.value,
             booking.timestamp.strftime("%Y-%m-%d %H:%M:%S")

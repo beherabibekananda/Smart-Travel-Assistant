@@ -1,6 +1,8 @@
 fastapi
 uvicorn
-sqlalchemy
+motor
+beanie
+pymongo
 pydantic[email]
 scikit-learn
 pandas

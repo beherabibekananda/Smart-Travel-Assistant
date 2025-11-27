@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from typing import List
+from bson import ObjectId
 from .. import models, schemas
-from ..database import get_db
 from ..auth import get_current_active_user
 
 router = APIRouter(
@@ -11,10 +10,9 @@ router = APIRouter(
 )
 
 @router.put("/me", response_model=schemas.User)
-def update_user_profile(
-    user_update: schemas.UserCreate, # Using UserCreate for simplicity, ideally UserUpdate
+async def update_user_profile(
+    user_update: schemas.UserCreate,  # Using UserCreate for simplicity, ideally UserUpdate
     current_user: models.User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
 ):
     """Update current user profile."""
     current_user.name = user_update.name
@@ -25,88 +23,78 @@ def update_user_profile(
     if user_update.avatar_url:
         current_user.avatar_url = user_update.avatar_url
     
-    db.commit()
-    db.refresh(current_user)
+    await current_user.save()
     return current_user
 
 # Favorites
 @router.post("/favorites/{place_id}", response_model=schemas.Favorite)
-def add_favorite(
-    place_id: int,
+async def add_favorite(
+    place_id: str,
     current_user: models.User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
 ):
-    existing = db.query(models.Favorite).filter(
+    # Check if favorite already exists
+    existing = await models.Favorite.find_one(
         models.Favorite.user_id == current_user.id,
-        models.Favorite.place_id == place_id
-    ).first()
+        models.Favorite.place_id == ObjectId(place_id)
+    )
     
     if existing:
         return existing
         
-    favorite = models.Favorite(user_id=current_user.id, place_id=place_id)
-    db.add(favorite)
-    db.commit()
-    db.refresh(favorite)
+    favorite = models.Favorite(user_id=current_user.id, place_id=ObjectId(place_id))
+    await favorite.insert()
     return favorite
 
 @router.get("/favorites", response_model=List[schemas.Favorite])
-def get_favorites(
+async def get_favorites(
     current_user: models.User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
 ):
-    return db.query(models.Favorite).filter(models.Favorite.user_id == current_user.id).all()
+    return await models.Favorite.find(models.Favorite.user_id == current_user.id).to_list()
 
 @router.delete("/favorites/{place_id}")
-def remove_favorite(
-    place_id: int,
+async def remove_favorite(
+    place_id: str,
     current_user: models.User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
 ):
-    db.query(models.Favorite).filter(
+    favorite = await models.Favorite.find_one(
         models.Favorite.user_id == current_user.id,
-        models.Favorite.place_id == place_id
-    ).delete()
-    db.commit()
+        models.Favorite.place_id == ObjectId(place_id)
+    )
+    if favorite:
+        await favorite.delete()
     return {"message": "Favorite removed"}
 
 # Search History
 @router.post("/history", response_model=schemas.SearchHistory)
-def add_search_history(
+async def add_search_history(
     history: schemas.SearchHistoryCreate,
     current_user: models.User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
 ):
     db_history = models.SearchHistory(
         user_id=current_user.id,
         query=history.query,
         location=history.location
     )
-    db.add(db_history)
-    db.commit()
-    db.refresh(db_history)
+    await db_history.insert()
     return db_history
 
 @router.get("/history", response_model=List[schemas.SearchHistory])
-def get_search_history(
+async def get_search_history(
     current_user: models.User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
 ):
-    return db.query(models.SearchHistory).filter(
+    return await models.SearchHistory.find(
         models.SearchHistory.user_id == current_user.id
-    ).order_by(models.SearchHistory.timestamp.desc()).limit(10).all()
+    ).sort(-models.SearchHistory.timestamp).limit(10).to_list()
 
 @router.post("/", response_model=schemas.User)
-def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+async def create_user(user: schemas.UserCreate):
     db_user = models.User(**user.dict())
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+    await db_user.insert()
     return db_user
 
 @router.get("/{user_id}", response_model=schemas.User)
-def read_user(user_id: int, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+async def read_user(user_id: str):
+    db_user = await models.User.get(ObjectId(user_id))
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user

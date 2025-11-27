@@ -1,6 +1,5 @@
 import requests
 import os
-from sqlalchemy.orm import Session
 from .. import models
 from dotenv import load_dotenv
 
@@ -35,7 +34,7 @@ class GoogleMapsService:
         headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": self.api_key,
-            "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location,places.rating,places.priceLevel,places.types,places.id"
+            "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.addressComponents,places.location,places.rating,places.priceLevel,places.types,places.id"
         }
 
         body = {
@@ -75,8 +74,7 @@ class GoogleMapsService:
         types = google_place.get("types", [])
         tags = [t.replace("_", " ") for t in types if t not in ["point_of_interest", "establishment"]]
         
-        # Get price level (PRICE_LEVEL_UNSPECIFIED, PRICE_LEVEL_FREE, PRICE_LEVEL_INEXPENSIVE, 
-        # PRICE_LEVEL_MODERATE, PRICE_LEVEL_EXPENSIVE, PRICE_LEVEL_VERY_EXPENSIVE)
+        # Get price level
         price_level_map = {
             "PRICE_LEVEL_FREE": 0,
             "PRICE_LEVEL_INEXPENSIVE": 1,
@@ -99,6 +97,23 @@ class GoogleMapsService:
         # Extract location
         location = google_place.get("location", {})
         
+        # Extract address components for city and state
+        city = None
+        state = None
+        address_components = google_place.get("addressComponents", [])
+        
+        for component in address_components:
+            types_list = component.get("types", [])
+            if "locality" in types_list:
+                city = component.get("longText", component.get("shortText"))
+            elif "administrative_area_level_2" in types_list and not city:
+                city = component.get("longText", component.get("shortText"))
+            elif "administrative_area_level_1" in types_list:
+                state = component.get("longText", component.get("shortText"))
+        
+        # Get formatted address
+        formatted_address = google_place.get("formattedAddress", "")
+        
         return models.Place(
             google_place_id=google_place.get("id"),
             name=google_place.get("displayName", {}).get("text", "Unknown"),
@@ -108,10 +123,13 @@ class GoogleMapsService:
             rating=google_place.get("rating", 0.0),
             avg_cost_for_two=avg_cost,
             price_per_night=price_per_night,
-            tags=tags
+            tags=tags,
+            city=city,
+            state=state,
+            formatted_address=formatted_address
         )
 
-    def sync_places(self, db: Session, google_results: list, place_type_enum: models.PlaceType) -> list:
+    async def sync_places(self, google_results: list, place_type_enum: models.PlaceType) -> list:
         """
         Syncs Google results with the database. Returns a list of DB Place objects.
         """
@@ -123,14 +141,12 @@ class GoogleMapsService:
                 continue
             
             # Check if exists
-            db_place = db.query(models.Place).filter(models.Place.google_place_id == place_id).first()
+            db_place = await models.Place.find_one(models.Place.google_place_id == place_id)
             
             if not db_place:
                 # Create new
                 db_place = self.convert_to_db_model(g_place, place_type_enum)
-                db.add(db_place)
-                db.commit()
-                db.refresh(db_place)
+                await db_place.insert()
             
             synced_places.append(db_place)
             
@@ -139,6 +155,7 @@ class GoogleMapsService:
     def geocode(self, address: str) -> dict:
         """
         Geocodes an address to lat/lon using Google Maps Geocoding API.
+        Returns comprehensive location information.
         """
         if not self.api_key:
             print("Warning: GOOGLE_API_KEY not set.")
@@ -156,8 +173,28 @@ class GoogleMapsService:
             data = response.json()
             
             if data["status"] == "OK" and data["results"]:
-                location = data["results"][0]["geometry"]["location"]
-                return {"lat": location["lat"], "lon": location["lng"]}
+                result = data["results"][0]
+                location = result["geometry"]["location"]
+                
+                # Extract city and state from address components
+                city = None
+                state = None
+                for component in result.get("address_components", []):
+                    types = component.get("types", [])
+                    if "locality" in types:
+                        city = component.get("long_name")
+                    elif "administrative_area_level_2" in types and not city:
+                        city = component.get("long_name")
+                    elif "administrative_area_level_1" in types:
+                        state = component.get("long_name")
+                
+                return {
+                    "lat": location["lat"], 
+                    "lon": location["lng"],
+                    "city": city,
+                    "state": state,
+                    "formatted_address": result.get("formatted_address", "")
+                }
             else:
                 print(f"[Google Maps] Geocoding failed: {data.get('status')}")
                 return None

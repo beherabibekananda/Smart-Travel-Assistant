@@ -1,10 +1,28 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Float, Enum, JSON, DateTime
-from sqlalchemy.orm import relationship
-from .database import Base
-import enum
+from beanie import Document, Link
+from pydantic import Field, EmailStr
+from typing import Optional, List
 from datetime import datetime
+from enum import Enum
+from bson import ObjectId
 
-class DietType(str, enum.Enum):
+# Pydantic ObjectId for MongoDB
+class PyObjectId(ObjectId):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError("Invalid objectid")
+        return ObjectId(v)
+
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(type="string")
+
+# Enums
+class DietType(str, Enum):
     VEG = "VEG"
     VEGAN = "VEGAN"
     JAIN = "JAIN"
@@ -12,124 +30,152 @@ class DietType(str, enum.Enum):
     LOW_CARB = "LOW_CARB"
     DIABETIC_FRIENDLY = "DIABETIC_FRIENDLY"
 
-class PlaceType(str, enum.Enum):
+class PlaceType(str, Enum):
     RESTAURANT = "RESTAURANT"
     HOTEL = "HOTEL"
     HOSPITAL = "HOSPITAL"
 
-class BookingType(str, enum.Enum):
+class BookingType(str, Enum):
     HOTEL = "HOTEL"
     RESTAURANT = "RESTAURANT"
 
-class BookingStatus(str, enum.Enum):
+class BookingStatus(str, Enum):
     CONFIRMED = "CONFIRMED"
     CANCELLED = "CANCELLED"
 
-class PaymentStatus(str, enum.Enum):
+class PaymentStatus(str, Enum):
     CREATED = "CREATED"
     AUTHORIZED = "AUTHORIZED"
     CAPTURED = "CAPTURED"
     FAILED = "FAILED"
     REFUNDED = "REFUNDED"
 
-class User(Base):
-    __tablename__ = "users"
+# Document Models
+class User(Document):
+    email: EmailStr
+    hashed_password: str
+    name: Optional[str] = None
+    age: Optional[int] = None
+    diet_type: Optional[DietType] = None
+    daily_food_budget: Optional[float] = None
+    hotel_budget_per_night: Optional[float] = None
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    reset_token: Optional[str] = None
+    reset_token_expiry: Optional[datetime] = None
+    avatar_url: Optional[str] = None
+    email_verified: bool = False
+    otp_code: Optional[str] = None
+    otp_expiry: Optional[datetime] = None
 
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    name = Column(String, index=True)
-    age = Column(Integer)
-    diet_type = Column(Enum(DietType))
-    daily_food_budget = Column(Float)
-    hotel_budget_per_night = Column(Float)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    reset_token = Column(String, nullable=True)
-    reset_token_expiry = Column(DateTime, nullable=True)
-    avatar_url = Column(String, nullable=True)
+    class Settings:
+        name = "users"
+        indexes = [
+            "email",
+        ]
 
-    bookings = relationship("Booking", back_populates="user")
-    search_history = relationship("SearchHistory", back_populates="user")
-    favorites = relationship("Favorite", back_populates="user")
+class Place(Document):
+    google_place_id: Optional[str] = None
+    name: str
+    place_type: PlaceType
+    latitude: float
+    longitude: float
+    rating: Optional[float] = None
+    avg_cost_for_two: Optional[float] = None  # For restaurants
+    price_per_night: Optional[float] = None  # For hotels
+    tags: List[str] = []
+    city: Optional[str] = None
+    state: Optional[str] = None
+    formatted_address: Optional[str] = None
 
-class Place(Base):
-    __tablename__ = "places"
+    class Settings:
+        name = "places"
+        indexes = [
+            "name",
+            "place_type",
+            "google_place_id",
+        ]
 
-    id = Column(Integer, primary_key=True, index=True)
-    google_place_id = Column(String, unique=True, nullable=True)
-    name = Column(String, index=True)
-    place_type = Column(Enum(PlaceType))
-    latitude = Column(Float)
-    longitude = Column(Float)
-    rating = Column(Float)
-    avg_cost_for_two = Column(Float, nullable=True) # For restaurants
-    price_per_night = Column(Float, nullable=True) # For hotels
-    tags = Column(JSON) # List of strings
+class MenuItem(Document):
+    restaurant_id: ObjectId  # Reference to Place
+    item_name: str
+    description: Optional[str] = None
+    tags: List[str] = []
 
-    menu_items = relationship("MenuItem", back_populates="place")
-    bookings = relationship("Booking", back_populates="place")
-    favorited_by = relationship("Favorite", back_populates="place")
+    class Settings:
+        name = "menu_items"
+    
+    class Config:
+        arbitrary_types_allowed = True
 
-class MenuItem(Base):
-    __tablename__ = "menu_items"
+class Booking(Document):
+    user_id: ObjectId  # Reference to User
+    place_id: ObjectId  # Reference to Place
+    booking_type: BookingType
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    status: BookingStatus = BookingStatus.CONFIRMED
 
-    id = Column(Integer, primary_key=True, index=True)
-    restaurant_id = Column(Integer, ForeignKey("places.id"))
-    item_name = Column(String)
-    description = Column(String)
-    tags = Column(JSON) # List of strings
+    class Settings:
+        name = "bookings"
+    
+    class Config:
+        arbitrary_types_allowed = True
 
-    place = relationship("Place", back_populates="menu_items")
+class Transaction(Document):
+    booking_id: ObjectId  # Reference to Booking (unique)
+    razorpay_order_id: str
+    razorpay_payment_id: Optional[str] = None
+    razorpay_signature: Optional[str] = None
+    amount: float  # Amount in INR
+    currency: str = "INR"
+    status: PaymentStatus = PaymentStatus.CREATED
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-class Booking(Base):
-    __tablename__ = "bookings"
+    class Settings:
+        name = "transactions"
+        indexes = [
+            "razorpay_order_id",
+            "razorpay_payment_id",
+            "booking_id",
+        ]
+    
+    class Config:
+        arbitrary_types_allowed = True
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    place_id = Column(Integer, ForeignKey("places.id"))
-    booking_type = Column(Enum(BookingType))
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    status = Column(Enum(BookingStatus), default=BookingStatus.CONFIRMED)
+class SearchHistory(Document):
+    user_id: ObjectId  # Reference to User
+    query: str
+    location: Optional[str] = None
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-    user = relationship("User", back_populates="bookings")
-    place = relationship("Place", back_populates="bookings")
-    transaction = relationship("Transaction", back_populates="booking", uselist=False)
+    class Settings:
+        name = "search_history"
+    
+    class Config:
+        arbitrary_types_allowed = True
 
-class Transaction(Base):
-    __tablename__ = "transactions"
+class Favorite(Document):
+    user_id: ObjectId  # Reference to User
+    place_id: ObjectId  # Reference to Place
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-    id = Column(Integer, primary_key=True, index=True)
-    booking_id = Column(Integer, ForeignKey("bookings.id"), unique=True)
-    razorpay_order_id = Column(String, unique=True, nullable=False)
-    razorpay_payment_id = Column(String, unique=True, nullable=True)
-    razorpay_signature = Column(String, nullable=True)
-    amount = Column(Float, nullable=False)  # Amount in INR
-    currency = Column(String, default="INR")
-    status = Column(Enum(PaymentStatus), default=PaymentStatus.CREATED)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    class Settings:
+        name = "favorites"
+    
+    class Config:
+        arbitrary_types_allowed = True
 
-    booking = relationship("Booking", back_populates="transaction")
+class Review(Document):
+    user_id: ObjectId  # Reference to User
+    place_id: ObjectId  # Reference to Place
+    rating: float  # 1-5 stars
+    comment: Optional[str] = None
+    helpful_count: int = 0
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-class SearchHistory(Base):
-    __tablename__ = "search_history"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    query = Column(String, nullable=False)
-    location = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-
-    user = relationship("User", back_populates="search_history")
-
-class Favorite(Base):
-    __tablename__ = "favorites"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    place_id = Column(Integer, ForeignKey("places.id"))
-    timestamp = Column(DateTime, default=datetime.utcnow)
-
-    user = relationship("User", back_populates="favorites")
-    place = relationship("Place", back_populates="favorited_by")
+    class Settings:
+        name = "reviews"
+    
+    class Config:
+        arbitrary_types_allowed = True

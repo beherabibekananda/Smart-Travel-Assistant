@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
+import random
+import string
 from .. import models, schemas
-from ..database import get_db
 from ..auth import (
     verify_password,
     get_password_hash,
@@ -11,24 +11,54 @@ from ..auth import (
     get_current_active_user,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
+from ..services.email_service import email_service
 
 router = APIRouter(
     prefix="/auth",
     tags=["authentication"],
 )
 
-@router.post("/signup", response_model=schemas.User)
-def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    """Register a new user."""
+def generate_otp() -> str:
+    """Generate a 6-digit OTP."""
+    return ''.join(random.choices(string.digits, k=6))
+
+@router.post("/signup")
+async def signup(user: schemas.UserCreate):
+    """Register a new user and send OTP for email verification."""
     # Check if user already exists
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    db_user = await models.User.find_one(models.User.email == user.email)
     if db_user:
         raise HTTPException(
             status_code=400,
-            detail="Email already registered"
+            detail="This email is already registered. Please use a different email or try logging in."
         )
     
-    # Create new user
+    # Validate password strength
+    if len(user.password) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 6 characters long."
+        )
+    
+    # Validate email format (basic check)
+    if "@" not in user.email or "." not in user.email:
+        raise HTTPException(
+            status_code=400,
+            detail="Please provide a valid email address."
+        )
+    
+    # Validate age
+    if user.age < 13 or user.age > 120:
+        raise HTTPException(
+            status_code=400,
+            detail="Please enter a valid age between 13 and 120."
+        )
+    
+    # Generate OTP
+    otp_code = generate_otp()
+    otp_expiry = datetime.utcnow() + timedelta(minutes=5)
+    
+    # Create new user (not verified yet)
     hashed_password = get_password_hash(user.password)
     db_user = models.User(
         email=user.email,
@@ -37,22 +67,107 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
         age=user.age,
         diet_type=user.diet_type,
         daily_food_budget=user.daily_food_budget,
-        hotel_budget_per_night=user.hotel_budget_per_night
+        hotel_budget_per_night=user.hotel_budget_per_night,
+        email_verified=False,
+        otp_code=otp_code,
+        otp_expiry=otp_expiry
     )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
+    await db_user.insert()
+    
+    # Send OTP email
+    email_service.send_otp_email(user.email, otp_code, user.name)
+    
+    return {
+        "message": "Account created successfully. Please check your email for verification code.",
+        "email": user.email
+    }
+
+@router.post("/verify-email")
+async def verify_email(email: str, otp: str):
+    """Verify email with OTP code."""
+    user = await models.User.find_one(models.User.email == email)
+    
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found."
+        )
+    
+    if user.email_verified:
+        return {"message": "Email already verified. You can now login."}
+    
+    if not user.otp_code or not user.otp_expiry:
+        raise HTTPException(
+            status_code=400,
+            detail="No OTP found. Please request a new one."
+        )
+    
+    if user.otp_expiry < datetime.utcnow():
+        raise HTTPException(
+            status_code=400,
+            detail="OTP has expired. Please request a new one."
+        )
+    
+    if user.otp_code != otp:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid OTP. Please check and try again."
+        )
+    
+    # Mark user as verified
+    user.email_verified = True
+    user.otp_code = None
+    user.otp_expiry = None
+    await user.save()
+    
+    return {"message": "Email verified successfully! You can now login."}
+
+@router.post("/resend-otp")
+async def resend_otp(email: str):
+    """Resend OTP to user's email."""
+    user = await models.User.find_one(models.User.email == email)
+    
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found."
+        )
+    
+    if user.email_verified:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already verified."
+        )
+    
+    # Generate new OTP
+    otp_code = generate_otp()
+    otp_expiry = datetime.utcnow() + timedelta(minutes=5)
+    
+    user.otp_code = otp_code
+    user.otp_expiry = otp_expiry
+    await user.save()
+    
+    # Send OTP email
+    email_service.send_otp_email(user.email, otp_code, user.name)
+    
+    return {"message": "New OTP sent to your email."}
 
 @router.post("/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """Login and get access token."""
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    user = await models.User.find_one(models.User.email == form_data.username)
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="Invalid email or password. Please check your credentials and try again.",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Check if email is verified
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in. Check your inbox for the verification code.",
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -62,17 +177,17 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/me", response_model=schemas.User)
-def read_users_me(current_user: models.User = Depends(get_current_active_user)):
+async def read_users_me(current_user: models.User = Depends(get_current_active_user)):
     """Get current user information."""
     return current_user
 
 @router.post("/forgot-password")
-def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+async def forgot_password(request: schemas.ForgotPasswordRequest):
     """
     Generate a password reset token.
     In a real app, this would send an email. Here we return it for testing.
     """
-    user = db.query(models.User).filter(models.User.email == request.email).first()
+    user = await models.User.find_one(models.User.email == request.email)
     if not user:
         # Return 200 even if user not found to prevent email enumeration
         return {"message": "If the email exists, a reset token has been sent."}
@@ -81,14 +196,14 @@ def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depend
     token = str(uuid.uuid4())
     user.reset_token = token
     user.reset_token_expiry = datetime.utcnow() + timedelta(minutes=30)
-    db.commit()
+    await user.save()
     
     return {"message": "Password reset token generated", "reset_token": token}
 
 @router.post("/reset-password")
-def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
+async def reset_password(request: schemas.ResetPasswordRequest):
     """Reset password using a valid token."""
-    user = db.query(models.User).filter(models.User.reset_token == request.token).first()
+    user = await models.User.find_one(models.User.reset_token == request.token)
     
     if not user:
         raise HTTPException(status_code=400, detail="Invalid token")
@@ -100,6 +215,6 @@ def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(
     user.hashed_password = hashed_password
     user.reset_token = None
     user.reset_token_expiry = None
-    db.commit()
+    await user.save()
     
     return {"message": "Password updated successfully"}

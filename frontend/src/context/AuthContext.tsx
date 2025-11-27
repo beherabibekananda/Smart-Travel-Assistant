@@ -74,8 +74,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const signup = async (userData: any) => {
-        await axios.post(`${API_BASE_URL}/auth/signup`, userData);
-        await login(userData.email, userData.password);
+        try {
+            await axios.post(`${API_BASE_URL}/auth/signup`, userData);
+            await login(userData.email, userData.password);
+        } catch (error: any) {
+            // If signup succeeds but login fails, throw a specific error
+            if (error.response?.status === 401) {
+                throw new Error('Account created successfully, but auto-login failed. Please try logging in manually.');
+            }
+            // Re-throw the original error
+            throw error;
+        }
     };
 
     const logout = () => {

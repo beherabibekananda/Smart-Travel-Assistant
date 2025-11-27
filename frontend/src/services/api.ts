@@ -13,6 +13,7 @@ export interface User {
     hotel_budget_per_night: number;
     is_active: boolean;
     created_at: string;
+    avatar_url?: string;
 }
 
 export interface Place {
@@ -28,6 +29,9 @@ export interface Place {
     diet_compatibility_score?: number;
     final_score?: number;
     distance_km?: number;
+    city?: string;
+    state?: string;
+    formatted_address?: string;
 }
 
 export interface Booking {
@@ -84,7 +88,7 @@ export const createBooking = (bookingData: {
 
 export const getUserBookings = (userId: number) => api.get<Booking[]>(`/bookings/user/${userId}`);
 
-export const geocodeLocation = (address: string) => api.get<{ lat: number; lon: number }>('/recommend/geocode', { params: { address } });
+export const geocodeLocation = (address: string) => api.get<{ lat: number; lon: number; city?: string; state?: string; formatted_address?: string }>('/recommend/geocode', { params: { address } });
 
 export const forgotPassword = (email: string) => api.post<{ message: string; reset_token?: string }>('/auth/forgot-password', { email });
 
@@ -99,7 +103,66 @@ export const addFavorite = (placeId: number) => api.post<Place>(`/users/favorite
 export const removeFavorite = (placeId: number) => api.delete(`/users/favorites/${placeId}`);
 export const getFavorites = () => api.get<{ id: number; place_id: number; place: Place }[]>('/users/favorites');
 
-export const addSearchHistory = (query: string, location?: string) => api.post('/users/history', { query, location });
+export const addSearchHistory = (query: string, location: string) => api.post('/users/history', { query, location });
 export const getSearchHistory = () => api.get<{ id: number; query: string; location: string; timestamp: string }[]>('/users/history');
+
+// Reviews
+export interface Review {
+    id: number;
+    user_id: number;
+    place_id: number;
+    rating: number;
+    comment: string;
+    helpful_count: number;
+    timestamp: string;
+    user?: {
+        name: string;
+        avatar_url?: string;
+    };
+}
+
+export const createReview = (placeId: number, rating: number, comment: string) =>
+    api.post<Review>('/reviews/', { place_id: placeId, rating, comment });
+
+export const getPlaceReviews = (placeId: number) =>
+    api.get<Review[]>(`/reviews/place/${placeId}`);
+
+export const getUserReviews = () =>
+    api.get<Review[]>('/reviews/user');
+
+export const updateReview = (reviewId: number, rating?: number, comment?: string) =>
+    api.put<Review>(`/reviews/${reviewId}`, { rating, comment });
+
+export const deleteReview = (reviewId: number) =>
+    api.delete(`/reviews/${reviewId}`);
+
+export const markReviewHelpful = (reviewId: number) =>
+    api.post(`/reviews/${reviewId}/helpful`);
+
+// Weather
+export interface WeatherData {
+    current: {
+        temp: number;
+        feels_like: number;
+        temp_min: number;
+        temp_max: number;
+        pressure: number;
+        humidity: number;
+        description: string;
+        icon: string;
+        wind_speed: number;
+    };
+    forecast: Array<{
+        dt: number;
+        temp: number;
+        description: string;
+        icon: string;
+        date: string;
+    }>;
+}
+
+export const getWeather = (lat: number, lon: number) =>
+    api.get<WeatherData>('/weather', { params: { lat, lon } });
+
 
 export default api;

@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
-from sqlalchemy.orm import Session
 from typing import Optional
+from bson import ObjectId
 from .. import models, schemas
-from ..database import get_db
 from ..auth import get_current_active_user
 from ..services.razorpay_service import razorpay_service, RAZORPAY_KEY_ID
 import os
@@ -14,27 +13,26 @@ router = APIRouter(
 
 
 @router.post("/create-order", response_model=schemas.PaymentOrderResponse)
-def create_payment_order(
+async def create_payment_order(
     payment_data: schemas.PaymentOrderCreate,
-    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user)
 ):
     """
     Create a Razorpay payment order for a booking
     """
     # Verify booking exists and belongs to current user
-    booking = db.query(models.Booking).filter(
-        models.Booking.id == payment_data.booking_id,
+    booking = await models.Booking.find_one(
+        models.Booking.id == ObjectId(payment_data.booking_id),
         models.Booking.user_id == current_user.id
-    ).first()
+    )
     
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     
     # Check if transaction already exists
-    existing_transaction = db.query(models.Transaction).filter(
-        models.Transaction.booking_id == payment_data.booking_id
-    ).first()
+    existing_transaction = await models.Transaction.find_one(
+        models.Transaction.booking_id == ObjectId(payment_data.booking_id)
+    )
     
     if existing_transaction:
         raise HTTPException(status_code=400, detail="Payment already initiated for this booking")
@@ -47,16 +45,14 @@ def create_payment_order(
     
     # Create transaction record
     transaction = models.Transaction(
-        booking_id=payment_data.booking_id,
+        booking_id=ObjectId(payment_data.booking_id),
         razorpay_order_id=order["id"],
         amount=payment_data.amount,
         currency=order["currency"],
         status=models.PaymentStatus.CREATED
     )
     
-    db.add(transaction)
-    db.commit()
-    db.refresh(transaction)
+    await transaction.insert()
     
     return {
         "order_id": order["id"],
@@ -67,27 +63,26 @@ def create_payment_order(
 
 
 @router.post("/verify")
-def verify_payment(
+async def verify_payment(
     payment_verify: schemas.PaymentVerify,
-    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user)
 ):
     """
     Verify Razorpay payment signature and update transaction status
     """
     # Get transaction
-    transaction = db.query(models.Transaction).filter(
+    transaction = await models.Transaction.find_one(
         models.Transaction.razorpay_order_id == payment_verify.razorpay_order_id
-    ).first()
+    )
     
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
     # Verify booking belongs to current user
-    booking = db.query(models.Booking).filter(
+    booking = await models.Booking.find_one(
         models.Booking.id == transaction.booking_id,
         models.Booking.user_id == current_user.id
-    ).first()
+    )
     
     if not booking:
         raise HTTPException(status_code=403, detail="Unauthorized")
@@ -101,7 +96,7 @@ def verify_payment(
     
     if not is_valid:
         transaction.status = models.PaymentStatus.FAILED
-        db.commit()
+        await transaction.save()
         raise HTTPException(status_code=400, detail="Invalid payment signature")
     
     # Update transaction
@@ -112,37 +107,36 @@ def verify_payment(
     # Update booking status
     booking.status = models.BookingStatus.CONFIRMED
     
-    db.commit()
-    db.refresh(transaction)
+    await transaction.save()
+    await booking.save()
     
     return {
         "success": True,
         "message": "Payment verified successfully",
-        "transaction_id": transaction.id
+        "transaction_id": str(transaction.id)
     }
 
 
 @router.get("/transaction/{booking_id}", response_model=schemas.TransactionResponse)
-def get_transaction(
-    booking_id: int,
-    db: Session = Depends(get_db),
+async def get_transaction(
+    booking_id: str,
     current_user: models.User = Depends(get_current_active_user)
 ):
     """
     Get transaction details for a booking
     """
     # Verify booking belongs to current user
-    booking = db.query(models.Booking).filter(
-        models.Booking.id == booking_id,
+    booking = await models.Booking.find_one(
+        models.Booking.id == ObjectId(booking_id),
         models.Booking.user_id == current_user.id
-    ).first()
+    )
     
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     
-    transaction = db.query(models.Transaction).filter(
-        models.Transaction.booking_id == booking_id
-    ).first()
+    transaction = await models.Transaction.find_one(
+        models.Transaction.booking_id == ObjectId(booking_id)
+    )
     
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -153,8 +147,7 @@ def get_transaction(
 @router.post("/webhook")
 async def razorpay_webhook(
     request: Request,
-    x_razorpay_signature: Optional[str] = Header(None),
-    db: Session = Depends(get_db)
+    x_razorpay_signature: Optional[str] = Header(None)
 ):
     """
     Handle Razorpay webhook events

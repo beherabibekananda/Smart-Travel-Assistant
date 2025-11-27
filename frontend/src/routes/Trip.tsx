@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { getRestaurantRecommendations, getHotelRecommendations, getNearbyHospitals, createBooking, geocodeLocation, addFavorite, removeFavorite, getFavorites, addSearchHistory, type Place } from '../services/api';
-import { Utensils, Hotel, Activity, MapPin, Search, Heart } from 'lucide-react';
+import { getRestaurantRecommendations, getHotelRecommendations, getNearbyHospitals, createBooking, geocodeLocation, addFavorite, removeFavorite, getFavorites, addSearchHistory, getWeather, getPlaceReviews, createReview, markReviewHelpful, type Place, type WeatherData, type Review } from '../services/api';
+import { Utensils, Hotel, Activity, MapPin, Search, Heart, Star } from 'lucide-react';
 import PaymentModal from '../components/PaymentModal';
+import WeatherWidget from '../components/WeatherWidget';
+import ReviewCard from '../components/ReviewCard';
+import ReviewForm from '../components/ReviewForm';
 
 const Trip: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'restaurants' | 'hotels' | 'hospitals'>('restaurants');
@@ -21,6 +24,15 @@ const Trip: React.FC = () => {
     // Payment Modal State
     const [paymentModalOpen, setPaymentModalOpen] = useState(false);
     const [selectedPlace, setSelectedPlace] = useState<{ id: number; name: string; amount: number } | null>(null);
+
+    // Weather State
+    const [weather, setWeather] = useState<WeatherData | null>(null);
+    const [locationName, setLocationName] = useState<string>("Current Location");
+
+    // Reviews State
+    const [showReviewForm, setShowReviewForm] = useState<{ placeId: number; placeName: string } | null>(null);
+    const [placeReviews, setPlaceReviews] = useState<Record<number, Review[]>>({});
+    const [expandedReviews, setExpandedReviews] = useState<Record<number, boolean>>({});
 
     const restaurantMutation = useMutation({
         mutationFn: (data: { user_id: number; current_lat: number; current_lon: number; radius_km: number; planned_meal_time?: string }) =>
@@ -83,6 +95,14 @@ const Trip: React.FC = () => {
                 current_lat: res.data.lat,
                 current_lon: res.data.lon
             }));
+            // Update location name for weather widget
+            if (res.data.city && res.data.state) {
+                setLocationName(`${res.data.city}, ${res.data.state}`);
+            } else if (res.data.city) {
+                setLocationName(res.data.city);
+            } else if (res.data.formatted_address) {
+                setLocationName(res.data.formatted_address);
+            }
         } catch (error) {
             console.error("Error geocoding location:", error);
             alert("Location not found. Please try a different search term.");
@@ -112,6 +132,61 @@ const Trip: React.FC = () => {
             removeFavoriteMutation.mutate(placeId);
         } else {
             addFavoriteMutation.mutate(placeId);
+        }
+    };
+
+    // Fetch weather when search params change
+    useEffect(() => {
+        const fetchWeather = async () => {
+            try {
+                const res = await getWeather(searchParams.current_lat, searchParams.current_lon);
+                setWeather(res.data);
+            } catch (error) {
+                console.error('Error fetching weather:', error);
+            }
+        };
+        fetchWeather();
+    }, [searchParams.current_lat, searchParams.current_lon]);
+
+    // Load reviews for a place
+    const loadReviews = async (placeId: number) => {
+        if (placeReviews[placeId]) {
+            // Toggle expanded state if already loaded
+            setExpandedReviews(prev => ({ ...prev, [placeId]: !prev[placeId] }));
+            return;
+        }
+        try {
+            const res = await getPlaceReviews(placeId);
+            setPlaceReviews(prev => ({ ...prev, [placeId]: res.data }));
+            setExpandedReviews(prev => ({ ...prev, [placeId]: true }));
+        } catch (error) {
+            console.error('Error loading reviews:', error);
+        }
+    };
+
+    // Handle review submission
+    const handleReviewSubmit = async (placeId: number, rating: number, comment: string) => {
+        try {
+            await createReview(placeId, rating, comment);
+            setShowReviewForm(null);
+            // Reload reviews for this place
+            const res = await getPlaceReviews(placeId);
+            setPlaceReviews(prev => ({ ...prev, [placeId]: res.data }));
+        } catch (error) {
+            console.error('Error submitting review:', error);
+            alert('Failed to submit review. You may have already reviewed this place.');
+        }
+    };
+
+    // Mark review as helpful
+    const handleMarkHelpful = async (reviewId: number, placeId: number) => {
+        try {
+            await markReviewHelpful(reviewId);
+            // Reload reviews for this place
+            const res = await getPlaceReviews(placeId);
+            setPlaceReviews(prev => ({ ...prev, [placeId]: res.data }));
+        } catch (error) {
+            console.error('Error marking review helpful:', error);
         }
     };
 
@@ -191,7 +266,19 @@ const Trip: React.FC = () => {
                 </div>
 
                 <div className="text-sm text-gray-600 space-y-1 mb-4">
-                    <p className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {place.distance_km?.toFixed(2)} km away</p>
+                    {/* Location Information */}
+                    {(place.city || place.state) && (
+                        <p className="flex items-center gap-1 font-medium text-gray-700">
+                            <MapPin className="w-4 h-4 text-blue-600" />
+                            {place.city && place.state ? `${place.city}, ${place.state}` : place.city || place.state}
+                        </p>
+                    )}
+                    {place.formatted_address && (
+                        <p className="text-xs text-gray-500 pl-5">{place.formatted_address}</p>
+                    )}
+                    <p className="flex items-center gap-1">
+                        <span className="text-gray-500">Distance:</span> {place.distance_km?.toFixed(2)} km away
+                    </p>
                     {type === 'RESTAURANT' && <p>Cost for two: ₹{place.avg_cost_for_two}</p>}
                     {type === 'HOTEL' && <p>Price per night: ₹{place.price_per_night}</p>}
                     {type === 'RESTAURANT' && place.diet_compatibility_score !== undefined && (
@@ -218,11 +305,48 @@ const Trip: React.FC = () => {
                     ))}
                 </div>
 
+                {/* Reviews Section */}
+                <div className="mt-4 border-t pt-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <button
+                            onClick={() => loadReviews(place.id)}
+                            className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                            <Star className="w-4 h-4" />
+                            {expandedReviews[place.id] ? 'Hide Reviews' : `View Reviews (${placeReviews[place.id]?.length || 0})`}
+                        </button>
+                        {userId && (
+                            <button
+                                onClick={() => setShowReviewForm({ placeId: place.id, placeName: place.name })}
+                                className="text-sm text-green-600 hover:underline"
+                            >
+                                Write Review
+                            </button>
+                        )}
+                    </div>
+
+                    {expandedReviews[place.id] && placeReviews[place.id] && (
+                        <div className="space-y-3 max-h-64 overflow-y-auto mt-3">
+                            {placeReviews[place.id].length > 0 ? (
+                                placeReviews[place.id].slice(0, 5).map(review => (
+                                    <ReviewCard
+                                        key={review.id}
+                                        review={review}
+                                        onMarkHelpful={(id) => handleMarkHelpful(id, place.id)}
+                                    />
+                                ))
+                            ) : (
+                                <p className="text-sm text-gray-500 italic">No reviews yet. Be the first to review!</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+
                 {type !== 'HOSPITAL' && (
                     <button
                         onClick={() => handleBook(place, type)}
                         disabled={bookingMutation.isPending}
-                        className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                        className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors mt-4"
                     >
                         {bookingMutation.isPending && selectedPlace?.id === place.id ? 'Processing...' : 'Book & Pay'}
                     </button>
@@ -336,6 +460,11 @@ const Trip: React.FC = () => {
 
                 {/* Results Panel */}
                 <div className="w-full md:w-2/3">
+                    {/* Weather Widget */}
+                    {weather && (
+                        <WeatherWidget weather={weather} locationName={locationName} />
+                    )}
+
                     <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6 w-fit">
                         <button
                             onClick={() => setActiveTab('restaurants')}
@@ -387,6 +516,16 @@ const Trip: React.FC = () => {
                         setPaymentModalOpen(false);
                         // Optionally refresh bookings or show success message
                     }}
+                />
+            )}
+
+            {/* Review Form Modal */}
+            {showReviewForm && (
+                <ReviewForm
+                    placeId={showReviewForm.placeId}
+                    placeName={showReviewForm.placeName}
+                    onSubmit={(rating, comment) => handleReviewSubmit(showReviewForm.placeId, rating, comment)}
+                    onClose={() => setShowReviewForm(null)}
                 />
             )}
         </div>

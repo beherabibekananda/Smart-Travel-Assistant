@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from typing import List
+from bson import ObjectId
 from .. import models, schemas
-from ..database import get_db
 from ..utils import haversine_distance
 from ..ml.diet_model import diet_model
 from ..ml.ranking import score_restaurant, score_hotel
@@ -13,8 +12,8 @@ router = APIRouter(
 )
 
 @router.post("/recommend/restaurants", response_model=List[schemas.Place])
-def recommend_restaurants(request: schemas.RestaurantRecommendationRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == request.user_id).first()
+async def recommend_restaurants(request: schemas.RestaurantRecommendationRequest):
+    user = await models.User.get(ObjectId(request.user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -27,11 +26,11 @@ def recommend_restaurants(request: schemas.RestaurantRecommendationRequest, db: 
     )
     
     # 2. Sync to DB
-    restaurants = google_maps_service.sync_places(db, google_results, models.PlaceType.RESTAURANT)
+    restaurants = await google_maps_service.sync_places(google_results, models.PlaceType.RESTAURANT)
     
     # If Google fails or returns nothing, fallback to existing DB data (mock data)
     if not restaurants:
-        restaurants = db.query(models.Place).filter(models.Place.place_type == models.PlaceType.RESTAURANT).all()
+        restaurants = await models.Place.find(models.Place.place_type == models.PlaceType.RESTAURANT).to_list()
 
     scored_restaurants = []
     
@@ -43,14 +42,13 @@ def recommend_restaurants(request: schemas.RestaurantRecommendationRequest, db: 
             continue
             
         # Calculate Diet Compatibility Score
-        # Since we might not have menu items for Google places, we use tags/name
-        # Construct a "virtual" menu text from tags and name
         menu_text = f"{r.name} {' '.join(r.tags or [])}"
         
-        # If we have real menu items (from seed data), include them
-        if r.menu_items:
-            for item in r.menu_items:
-                menu_text += f" {item.item_name} {item.description}"
+        # Get menu items for this restaurant
+        menu_items = await models.MenuItem.find(models.MenuItem.restaurant_id == r.id).to_list()
+        if menu_items:
+            for item in menu_items:
+                menu_text += f" {item.item_name} {item.description or ''}"
         
         diet_score = diet_model.predict(user.diet_type.value, menu_text)
 
@@ -69,8 +67,8 @@ def recommend_restaurants(request: schemas.RestaurantRecommendationRequest, db: 
     return scored_restaurants[:10]
 
 @router.post("/recommend/hotels", response_model=List[schemas.Place])
-def recommend_hotels(request: schemas.HotelRecommendationRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == request.user_id).first()
+async def recommend_hotels(request: schemas.HotelRecommendationRequest):
+    user = await models.User.get(ObjectId(request.user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -83,10 +81,10 @@ def recommend_hotels(request: schemas.HotelRecommendationRequest, db: Session = 
     )
     
     # 2. Sync to DB
-    hotels = google_maps_service.sync_places(db, google_results, models.PlaceType.HOTEL)
+    hotels = await google_maps_service.sync_places(google_results, models.PlaceType.HOTEL)
     
     if not hotels:
-        hotels = db.query(models.Place).filter(models.Place.place_type == models.PlaceType.HOTEL).all()
+        hotels = await models.Place.find(models.Place.place_type == models.PlaceType.HOTEL).to_list()
     
     scored_hotels = []
     
@@ -108,7 +106,7 @@ def recommend_hotels(request: schemas.HotelRecommendationRequest, db: Session = 
     return scored_hotels[:10]
 
 @router.post("/nearby/hospitals", response_model=List[schemas.Place])
-def nearby_hospitals(request: schemas.HospitalRecommendationRequest, db: Session = Depends(get_db)):
+async def nearby_hospitals(request: schemas.HospitalRecommendationRequest):
     # 1. Fetch from Google Maps
     google_results = google_maps_service.search_nearby(
         request.current_lat, 
@@ -118,10 +116,10 @@ def nearby_hospitals(request: schemas.HospitalRecommendationRequest, db: Session
     )
     
     # 2. Sync to DB
-    hospitals = google_maps_service.sync_places(db, google_results, models.PlaceType.HOSPITAL)
+    hospitals = await google_maps_service.sync_places(google_results, models.PlaceType.HOSPITAL)
     
     if not hospitals:
-        hospitals = db.query(models.Place).filter(models.Place.place_type == models.PlaceType.HOSPITAL).all()
+        hospitals = await models.Place.find(models.Place.place_type == models.PlaceType.HOSPITAL).to_list()
     
     nearby = []
     for h in hospitals:
