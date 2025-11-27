@@ -17,8 +17,8 @@ client: AsyncIOMotorClient = None
 async def connect_to_mongo():
     """Connect to MongoDB Atlas"""
     global client
-    # Use certifi for SSL certificate verification, but allow invalid certs for debugging
-    client = AsyncIOMotorClient(MONGODB_URL, tlsAllowInvalidCertificates=True)
+    # Use certifi for SSL certificate verification to fix Render deployment issues
+    client = AsyncIOMotorClient(MONGODB_URL, tlsCAFile=certifi.where())
     
     # Import all document models
     from app.models import User, Place, MenuItem, Booking, Transaction, SearchHistory, Favorite, Review
