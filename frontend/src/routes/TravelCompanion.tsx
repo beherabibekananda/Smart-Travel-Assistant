@@ -118,6 +118,10 @@ const TravelCompanion = () => {
                     <h1 className="text-3xl font-bold text-green-400 flex items-center justify-center gap-2">
                         Smart Travel Assistant <Globe className="w-8 h-8 text-blue-400 animate-pulse" />
                     </h1>
+                    <div className="flex justify-center gap-4 mt-4">
+                        <a href="/trip" className="text-sm text-blue-300 hover:text-blue-100 underline">Plan Trip</a>
+                        <a href="/profile" className="text-sm text-blue-300 hover:text-blue-100 underline">Profile</a>
+                    </div>
                 </div>
 
                 {/* Status Card */}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { UserPlus } from 'lucide-react';
+import { API_BASE_URL } from '../services/api';
 
 const Signup: React.FC = () => {
     const [formData, setFormData] = useState({
@@ -23,7 +24,7 @@ const Signup: React.FC = () => {
         setLoading(true);
 
         try {
-            await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/auth/signup`, formData);
+            await axios.post(`${API_BASE_URL}/auth/signup`, formData);
             // Redirect to verification page with email
             navigate(`/verify-email?email=${encodeURIComponent(formData.email)}`);
         } catch (err: any) {

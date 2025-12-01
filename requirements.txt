@@ -2,7 +2,7 @@ fastapi
 uvicorn
 motor
 beanie
-pymongo
+pymongo[srv]
 pydantic[email]
 scikit-learn
 pandas
@@ -18,3 +18,4 @@ razorpay
 email-validator
 aiohttp
 certifi
+dnspython

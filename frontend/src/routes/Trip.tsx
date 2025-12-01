@@ -279,6 +279,15 @@ const Trip: React.FC = () => {
                     <p className="flex items-center gap-1">
                         <span className="text-gray-500">Distance:</span> {place.distance_km?.toFixed(2)} km away
                     </p>
+                    <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + ' ' + (place.formatted_address || place.city))}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline text-xs flex items-center gap-1 mt-1"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <MapPin className="w-3 h-3" /> View on Map
+                    </a>
                     {type === 'RESTAURANT' && <p>Cost for two: ₹{place.avg_cost_for_two}</p>}
                     {type === 'HOTEL' && <p>Price per night: ₹{place.price_per_night}</p>}
                     {type === 'RESTAURANT' && place.diet_compatibility_score !== undefined && (

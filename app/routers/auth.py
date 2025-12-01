@@ -58,29 +58,38 @@ async def signup(user: schemas.UserCreate):
     otp_code = generate_otp()
     otp_expiry = datetime.utcnow() + timedelta(minutes=5)
     
-    # Create new user (not verified yet)
-    hashed_password = get_password_hash(user.password)
-    db_user = models.User(
-        email=user.email,
-        hashed_password=hashed_password,
-        name=user.name,
-        age=user.age,
-        diet_type=user.diet_type,
-        daily_food_budget=user.daily_food_budget,
-        hotel_budget_per_night=user.hotel_budget_per_night,
-        email_verified=False,
-        otp_code=otp_code,
-        otp_expiry=otp_expiry
-    )
-    await db_user.insert()
-    
-    # Send OTP email
-    email_service.send_otp_email(user.email, otp_code, user.name)
-    
-    return {
-        "message": "Account created successfully. Please check your email for verification code.",
-        "email": user.email
-    }
+    try:
+        # Create new user (not verified yet)
+        hashed_password = get_password_hash(user.password)
+        db_user = models.User(
+            email=user.email,
+            hashed_password=hashed_password,
+            name=user.name,
+            age=user.age,
+            diet_type=user.diet_type,
+            daily_food_budget=user.daily_food_budget,
+            hotel_budget_per_night=user.hotel_budget_per_night,
+            email_verified=False,
+            otp_code=otp_code,
+            otp_expiry=otp_expiry
+        )
+        await db_user.insert()
+        
+        # Send OTP email
+        email_service.send_otp_email(user.email, otp_code, user.name)
+        
+        return {
+            "message": "Account created successfully. Please check your email for verification code.",
+            "email": user.email
+        }
+    except Exception as e:
+        print(f"ERROR during signup: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while creating your account. Please try again later."
+        )
 
 @router.post("/verify-email")
 async def verify_email(email: str, otp: str):

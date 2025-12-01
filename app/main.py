@@ -9,13 +9,27 @@ app = FastAPI(
 )
 
 # CORS middleware
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import traceback
+
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=".*",  # Allow all origins with credentials
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    print(f"Global Exception: {exc}")
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error. Check server logs for details."},
+    )
 
 @app.on_event("startup")
 async def startup_event():
