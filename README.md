@@ -2,6 +2,14 @@
 
 A full-stack travel planning application with AI-powered diet compatibility scoring and real-time place recommendations using Google Maps API.
 
+<div align="center">
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/beherabibekananda/Smart-Travel-Assistant)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/beherabibekananda/Smart-Travel-Assistant)
+
+</div>
+
 ## Features
 
 ### Backend (FastAPI + Python)
